@@ -32,6 +32,16 @@
             android:layout_marginBottom="10dp"
             android:layout_marginRight="10dp"/>
 
+        <ImageView
+            android:layout_width="100dp"
+            android:layout_height="50dp"
+            android:id="@+id/streetview_preview"
+            android:layout_alignParentBottom="true"
+            android:layout_alignParentLeft="true"
+            android:layout_marginBottom="5dp"
+            android:layout_marginLeft="5dp"
+            android:visibility="invisible"/>
+
     </RelativeLayout>
 
 

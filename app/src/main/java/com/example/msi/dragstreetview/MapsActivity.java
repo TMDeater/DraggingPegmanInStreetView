@@ -1,21 +1,26 @@
 package com.example.msi.dragstreetview;
 
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Point;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
+import android.os.AsyncTask;
 import android.support.v4.app.FragmentActivity;
 import android.os.Bundle;
 import android.support.v4.view.ViewPager;
 import android.support.v4.widget.DrawerLayout;
 import android.support.v4.widget.SlidingPaneLayout;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
+import android.widget.Toast;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -28,11 +33,22 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.StreetViewPanoramaLocation;
+import com.squareup.picasso.Callback;
+import com.squareup.picasso.Picasso;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.net.URLEncoder;
+import java.util.concurrent.ExecutionException;
 
 public class MapsActivity extends FragmentActivity implements OnMapReadyCallback {
 
@@ -40,6 +56,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private Button streetV;
     private Marker marker;
     private ImageView pegman;
+    private ImageView streetPreview;
+    private Boolean streetViewIsAvailable;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -49,6 +67,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
+
+        streetViewIsAvailable=false;
+
+        streetPreview= (ImageView) findViewById(R.id.streetview_preview);
 
         pegman = (ImageView) findViewById(R.id.user_icon);
         pegman.setOnTouchListener(new View.OnTouchListener(){
@@ -74,7 +96,21 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                         projection = mMap.getProjection();
                         LatLng geoPosition = projection.fromScreenLocation(
                                 new Point(location[0],location[1]));
-                        droppegmanstreetview(geoPosition);
+
+                        try {
+                            droppegmanstreetview(geoPosition);
+                        } catch (ExecutionException e) {
+                            e.printStackTrace();
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                        try {
+                            loadPreviewImage(geoPosition);
+                        } catch (ExecutionException e) {
+                            e.printStackTrace();
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
                         pegman.setX(originalX);
                         pegman.setY(originalY);
                         return true;
@@ -105,7 +141,14 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         }
     }
 
-    public void droppegmanstreetview(LatLng latlng){
+    public void droppegmanstreetview(LatLng latlng) throws ExecutionException, InterruptedException {
+        streetViewIsAvailable = new CheckStreetViewAvailability().execute(latlng).get();
+        if (!streetViewIsAvailable){
+            streetPreview.setVisibility(View.INVISIBLE);
+
+            return;
+        };
+
         Intent intent = new Intent();
 
         double latitude=latlng.latitude;
@@ -113,10 +156,26 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         intent.putExtra("Lat", latitude);
         intent.putExtra("Long", longtitude);
         intent.setClass(this , SVActivity.class);
-        startActivity(intent);
         if (intent.resolveActivity(getPackageManager()) != null) {
             startActivity(intent);
         }
+    }
+
+    public void loadPreviewImage(LatLng latLng) throws ExecutionException, InterruptedException {
+        streetViewIsAvailable = new CheckStreetViewAvailability().execute(latLng).get();
+        if (!streetViewIsAvailable){
+            streetPreview.setVisibility(View.INVISIBLE);
+            return;
+        };
+        String sLat = String.valueOf(latLng.latitude);
+        String sLng = String.valueOf(latLng.longitude);
+        String urlTemplate=new String("https://maps.googleapis.com/maps/api/streetview?size=200x100&location=#,%&key=AIzaSyAN0mv-2HUaBcRD0V8yOsV-11pW8-WD1J4");
+        String url = urlTemplate.replace("#",sLat).replace("%",sLng);
+
+        Picasso.with(getApplicationContext())
+                .load(url)
+                .into(streetPreview);
+        streetPreview.setVisibility(View.VISIBLE);
     }
 
 
@@ -147,31 +206,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         mMap.moveCamera(CameraUpdateFactory.newLatLng(hongkong));
 
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(marker.getPosition(),16));
-
-    }
-
-    public boolean checkAvailableStreetView(LatLng latLng) throws MalformedURLException {
-        Double lat=latLng.latitude;
-        Double lng=latLng.longitude;
-        String latString=lat.toString();
-        String lngString=lng.toString();
-        String urlString="http://maps.googleapis.com/maps/api/streetview?size=20x20&location="
-                +latString+","+lngString+"&fov=90&heading=235&pitch=10";
-        URL url = new URL(urlString);
-        HttpURLConnection connect = null;
-        try {
-            connect = (HttpURLConnection) url.openConnection();
-            connect.setRequestMethod("HEAD");
-            connect.getInputStream();
-            int fileSize = connect.getContentLength();
-            return true;
-        } catch (IOException e) {
-            return false;
-        } finally {
-            connect.disconnect();
-        }
-
-
 
     }
 
